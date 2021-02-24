@@ -3,8 +3,9 @@ package geom
 // A GeometryCollection is a collection of arbitrary geometries with the same
 // SRID.
 type GeometryCollection struct {
-	geoms []T
-	srid  int
+	layout Layout
+	geoms  []T
+	srid   int
 }
 
 // NewGeometryCollection returns a new empty GeometryCollection.
@@ -25,6 +26,9 @@ func (g *GeometryCollection) Geoms() []T {
 // Layout returns the smallest layout that covers all of the layouts in g's
 // geometries.
 func (g *GeometryCollection) Layout() Layout {
+	if g.layout != NoLayout {
+		return g.layout
+	}
 	maxLayout := NoLayout
 	for _, g := range g.geoms {
 		switch l := g.Layout(); l {
@@ -109,9 +113,49 @@ func (g *GeometryCollection) MustPush(gs ...T) *GeometryCollection {
 	return g
 }
 
+// MustSetLayout sets g's layout. It panics on any error.
+func (g *GeometryCollection) MustSetLayout(layout Layout) *GeometryCollection {
+	if layout != NoLayout {
+		for _, geom := range g.geoms {
+			if geomLayout := geom.Layout(); geomLayout != layout {
+				panic(ErrLayoutMismatch{
+					Got:  layout,
+					Want: geomLayout,
+				})
+			}
+		}
+	}
+	g.layout = layout
+	return g
+}
+
 // Push appends geometries.
 func (g *GeometryCollection) Push(gs ...T) error {
+	if g.layout != NoLayout {
+		for _, geom := range gs {
+			if geomLayout := geom.Layout(); geomLayout != g.layout {
+				return ErrLayoutMismatch{
+					Got:  geomLayout,
+					Want: g.layout,
+				}
+			}
+		}
+	}
 	g.geoms = append(g.geoms, gs...)
+	return nil
+}
+
+// SetLayout sets g's layout.
+func (g *GeometryCollection) SetLayout(layout Layout) error {
+	for _, geom := range g.geoms {
+		if geomLayout := geom.Layout(); geomLayout != layout {
+			return ErrLayoutMismatch{
+				Got:  layout,
+				Want: geomLayout,
+			}
+		}
+	}
+	g.layout = layout
 	return nil
 }
 
